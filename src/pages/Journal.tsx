@@ -1,291 +1,226 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Calendar } from "@/components/ui/calendar";
-import { PageHeader } from "@/components/ui/page-header";
-import { EmptyState } from "@/components/ui/empty-state";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
-import { JournalEntry, JournalEntryData } from "@/components/journal/JournalEntry";
-import { JournalEditor } from "@/components/journal/JournalEditor";
-import { JournalStats } from "@/components/journal/JournalStats";
-import { MoodValue } from "@/components/ui/mood-selector";
-import { 
-  BookOpen, 
-  Calendar as CalendarIcon,
-  Plus
-} from "lucide-react";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuthContext } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { Eye, EyeOff, User, Mail, Lock, CheckCircle } from "lucide-react";
 
-const STORAGE_KEY = 'mind-matters-journal-entries';
+const signUpSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  email: z.string().email("Please enter a valid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  confirmPassword: z.string()
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
+});
 
-export default function Journal() {
+type SignUpForm = z.infer<typeof signUpSchema>;
+
+const SignUp = () => {
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const navigate = useNavigate();
   const { toast } = useToast();
-  const { t } = useLanguage();
-  const [entries, setEntries] = useState<JournalEntryData[]>([]);
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [isLoading, setIsLoading] = useState(true);
-  const [editingEntry, setEditingEntry] = useState<JournalEntryData | null>(null);
+  const { signUp, loading } = useAuthContext();
 
-  // Load entries from localStorage
-  useEffect(() => {
-    try {
-      const savedEntries = localStorage.getItem(STORAGE_KEY);
-      if (savedEntries) {
-        const parsedEntries = JSON.parse(savedEntries);
-        setEntries(parsedEntries);
+  const form = useForm<SignUpForm>({
+    resolver: zodResolver(signUpSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+    },
+  });
+
+  const onSubmit = (data: SignUpForm) => {
+    signUp(data.email, data.password, {
+      full_name: data.name
+    }).then(({ error }) => {
+      if (!error) {
+        navigate("/");
       }
-    } catch (error) {
-      console.error('Failed to load journal entries:', error);
-      toast({
-        title: t('journal.toast.errorLoading'),
-        description: t('journal.toast.errorLoadingDesc'),
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [toast, t]);
-
-  // Save entries to localStorage
-  useEffect(() => {
-    if (!isLoading) {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
-      } catch (error) {
-        console.error('Failed to save journal entries:', error);
-        toast({
-          title: t('journal.toast.errorSaving'),
-          description: t('journal.toast.errorSavingDesc'),
-          variant: "destructive",
-        });
-      }
-    }
-  }, [entries, isLoading, toast, t]);
-
-  const handleSaveEntry = (entryData: {
-    mood: MoodValue;
-    content: string;
-    tags?: string[];
-  }) => {
-    if (editingEntry) {
-      // Update existing entry
-      const updatedEntry: JournalEntryData = {
-        ...editingEntry,
-        ...entryData,
-      };
-      
-      setEntries(prev => prev.map(entry => 
-        entry.id === editingEntry.id ? updatedEntry : entry
-      ));
-      
-      setEditingEntry(null);
-      
-      toast({
-        title: t('journal.toast.entryUpdated'),
-        description: t('journal.toast.entryUpdatedDesc'),
-      });
-    } else {
-      // Create new entry
-      const newEntry: JournalEntryData = {
-        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        date: selectedDate.toISOString().split('T')[0],
-        ...entryData,
-      };
-
-      setEntries(prev => [newEntry, ...prev]);
-      
-      toast({
-        title: t('journal.toast.entrySaved'),
-        description: t('journal.toast.entrySavedDesc'),
-      });
-    }
-  };
-
-  const handleDeleteEntry = (id: string) => {
-    setEntries(prev => prev.filter(entry => entry.id !== id));
-    toast({
-      title: t('journal.toast.entryDeleted'),
-      description: t('journal.toast.entryDeletedDesc'),
     });
   };
 
-  const handleEditEntry = (entry: JournalEntryData) => {
-    setEditingEntry(entry);
-    // Scroll to editor
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleCancelEdit = () => {
-    setEditingEntry(null);
-  };
-
-  const selectedDateEntries = entries.filter(
-    entry => entry.date === selectedDate.toISOString().split('T')[0]
-  );
-
-  const recentEntries = entries
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 10);
-
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-background pt-20 pb-8">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <LoadingSpinner size="lg" className="py-20" />
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-black flex items-center justify-center">
+        <div className="text-white text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
+          <p>Creating your account...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background pt-20 pb-8">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <PageHeader
-          icon={BookOpen}
-          title={t('journal.title')}
-          description={t('journal.subtitle')}
-        />
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Journal Editor */}
-            <JournalEditor
-              onSave={handleSaveEntry}
-              isEditing={!!editingEntry}
-              onCancel={editingEntry ? handleCancelEdit : undefined}
-              initialData={editingEntry ? {
-                mood: editingEntry.mood,
-                content: editingEntry.content,
-                tags: editingEntry.tags
-              } : undefined}
-            />
-
-            {/* Recent Entries */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BookOpen className="h-5 w-5" />
-                  {t('journal.recentEntries')}
-                </CardTitle>
-                <CardDescription>
-                  {t('journal.recentEntries')} • {entries.length} {t('journal.totalEntries')}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {recentEntries.length === 0 ? (
-                  <EmptyState
-                    icon={BookOpen}
-                    title={t('journal.noEntries')}
-                    description={t('journal.noEntriesDescription')}
-                    action={{
-                      label: t('journal.writeFirst'),
-                      onClick: () => window.scrollTo({ top: 0, behavior: 'smooth' })
-                    }}
-                  />
-                ) : (
-                  recentEntries.map((entry) => (
-                    <JournalEntry
-                      key={entry.id}
-                      entry={entry}
-                      onDelete={handleDeleteEntry}
-                      onEdit={handleEditEntry}
-                    />
-                  ))
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Calendar */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CalendarIcon className="h-5 w-5" />
-                  {t('journal.calendar')}
-                </CardTitle>
-                <CardDescription>
-                  {t('journal.calendarDescription')}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Calendar
-                  mode="single"
-                  selected={selectedDate}
-                  onSelect={(date) => date && setSelectedDate(date)}
-                  className="rounded-md border w-full"
-                  modifiers={{
-                    hasEntry: entries.map(entry => new Date(entry.date))
-                  }}
-                  modifiersStyles={{
-                    hasEntry: { 
-                      backgroundColor: 'hsl(var(--primary))', 
-                      color: 'white',
-                      fontWeight: 'bold'
-                    }
-                  }}
-                />
-                
-                {/* Selected Date Entries */}
-                {selectedDateEntries.length > 0 && (
-                  <div className="mt-4 space-y-2">
-                    <h4 className="text-sm font-medium">
-                      {t('journal.entriesFor')} {selectedDate.toLocaleDateString()}:
-                    </h4>
-                    {selectedDateEntries.map((entry) => {
-                      const moodOption = require("@/components/ui/mood-selector").moodOptions
-                        .find((m: any) => m.value === entry.mood);
-                      return (
-                        <div 
-                          key={entry.id} 
-                          className="text-xs p-2 bg-muted/30 rounded cursor-pointer hover:bg-muted/50 transition-colors"
-                          onClick={() => handleEditEntry(entry)}
-                        >
-                          {moodOption?.label} • {entry.content.slice(0, 50)}...
+    <ProtectedRoute requireAuth={false}>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-black flex items-center justify-center p-4">
+        <Card className="w-full max-w-md shadow-card hover:shadow-elegant hover:scale-[1.02] transition-all duration-300">
+          <CardHeader className="text-center space-y-2">
+            <div className="mx-auto w-12 h-12 bg-gradient-primary rounded-full flex items-center justify-center mb-2">
+              <User className="w-6 h-6 text-primary-foreground" />
+            </div>
+            <CardTitle className="text-2xl font-bold">Create Account</CardTitle>
+            <CardDescription>
+              Join MindMatters to start your wellness journey
+            </CardDescription>
+          </CardHeader>
+          
+          <CardContent>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Full Name</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
+                          <Input
+                            placeholder="Enter your full name"
+                            className="pl-10"
+                            {...field}
+                          />
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            {/* Journal Stats */}
-            <JournalStats entries={entries} />
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
+                          <Input
+                            placeholder="Enter your email"
+                            type="email"
+                            className="pl-10"
+                            {...field}
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
-            {/* Tips */}
-            <Card>
-              <CardHeader>
-                <CardTitle>{t('journal.tips.title')}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm text-muted-foreground">
-                <div className="flex items-start gap-2">
-                  <span className="text-primary">💡</span>
-                  <span>{t('journal.tips.regular')}</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-primary">🎯</span>
-                  <span>{t('journal.tips.honest')}</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-primary">🌱</span>
-                  <span>{t('journal.tips.growth')}</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-primary">📝</span>
-                  <span>{t('journal.tips.grammar')}</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-primary">🔒</span>
-                  <span>{t('journal.tips.private')}</span>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
+                          <Input
+                            placeholder="Create a password"
+                            type={showPassword ? "text" : "password"}
+                            className="pl-10 pr-10"
+                            {...field}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                            onClick={() => setShowPassword(!showPassword)}
+                          >
+                            {showPassword ? (
+                              <EyeOff className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <Eye className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </Button>
+                        </div>
+                      </FormControl>
+                      <FormDescription>
+                        Must be at least 8 characters long
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="confirmPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Confirm Password</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <CheckCircle className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
+                          <Input
+                            placeholder="Confirm your password"
+                            type={showConfirmPassword ? "text" : "password"}
+                            className="pl-10 pr-10"
+                            {...field}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          >
+                            {showConfirmPassword ? (
+                              <EyeOff className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <Eye className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </Button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <Button 
+                  type="submit" 
+                  className="w-full bg-gradient-primary hover:opacity-90 transition-opacity"
+                  disabled={form.formState.isSubmitting}
+                >
+                  {form.formState.isSubmitting ? "Creating Account..." : "Create Account"}
+                </Button>
+              </form>
+            </Form>
+
+            <div className="mt-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                Already have an account?{" "}
+                <Link
+                  to="/signin"
+                  className="font-medium text-primary hover:text-primary-glow transition-colors"
+                >
+                  Sign in here
+                </Link>
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
-    </div>
+    </ProtectedRoute>
   );
-}
+};
+
+export default SignUp;

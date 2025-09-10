@@ -1,158 +1,226 @@
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { cn } from "@/lib/utils";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { 
-  Brain,
-  Home,
-  Phone,
-  MessageCircle as WhatsApp,
-  Heart, 
-  Calendar, 
-  BookOpen, 
-  Users, 
-  Timer,
-  Menu,
-  LogIn,
-  Gamepad2,
-  MapPin,
-  ClipboardCheck,
-  Info,
-  User,
-  IndianRupee,
-  Languages
-} from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useToast } from "@/hooks/use-toast";
+import { useAuthContext } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { Eye, EyeOff, User, Mail, Lock, CheckCircle } from "lucide-react";
 
-const navItems = [
-  { name: "nav.home", href: "/", icon: Home },
-  { name: "nav.mood", href: "/mood", icon: Heart },
-  { name: "nav.ai", href: "/ai-chat", icon: WhatsApp },
-  { name: "nav.booking", href: "/booking", icon: Calendar },
-  { name: "nav.resources", href: "/resources", icon: BookOpen },
-  { name: "nav.community", href: "/community", icon: Users },
-  { name: "nav.pomodoro", href: "/pomodoro", icon: Timer },
-  { name: "nav.journal", href: "/journal", icon: BookOpen },
-  { name: "nav.activities", href: "/activities", icon: Gamepad2 },
-  { name: "nav.local", href: "/local-support", icon: MapPin },
-  { name: "nav.assessment", href: "/assessment", icon: ClipboardCheck },
-  { name: "nav.donation", href: "/donation", icon: IndianRupee },
-  { name: "nav.about", href: "/about", icon: Info },
-  { name: "nav.profile", href: "/profile", icon: User },
-];
+const signUpSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  email: z.string().email("Please enter a valid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  confirmPassword: z.string()
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
+});
 
-export function Navigation() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const { language, setLanguage, t } = useLanguage();
-  const location = useLocation();
+type SignUpForm = z.infer<typeof signUpSchema>;
 
-  return (
-    <nav className="sticky top-0 z-50 bg-background/95 backdrop-blur-md border-b border-border">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          {/* Left: Hamburger Menu and Logo */}
-          <div className="flex items-center space-x-3">
-            {/* Hamburger Menu */}
-            <Sheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
-              <SheetTrigger asChild>
-                <Button 
-                  variant="ghost" 
-                  size="icon"
-                  className="hover:bg-primary/10 transition-colors duration-200"
-                >
-                  <Menu className="h-5 w-5" />
-                  <span className="sr-only">Open menu</span>
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="left" className="w-80 flex flex-col p-0">
-                <div className="p-6 border-b border-border">
-                <div className="text-lg font-semibold text-foreground">{t('common.navigation')}</div>
-                <p className="text-sm text-muted-foreground mt-1">{language === 'hindi' ? 'आपकी कल्याण यात्रा यहां शुरू होती है' : 'Your wellness journey starts here'}</p>
-                </div>
-                <ScrollArea className="flex-1 px-2 pb-6">
-                  <div className="flex flex-col space-y-1">
-                    {navItems.map((item) => {
-                      const Icon = item.icon;
-                      const isActive = location.pathname === item.href;
-                      return (
-                        <Link
-                          key={item.name}
-                          to={item.href}
-                          onClick={() => setIsMenuOpen(false)}
-                          className={cn(
-                            "flex items-center space-x-3 p-3 mx-2 rounded-lg transition-all duration-200",
-                            isActive 
-                              ? "bg-primary/10 text-primary border border-primary/20" 
-                              : "hover:bg-muted/50 text-foreground"
-                          )}
-                        >
-                          <Icon className={cn(
-                            "h-5 w-5", 
-                            isActive ? 'text-primary' : 'text-muted-foreground'
-                          )} />
-                          <span className={cn(
-                            "text-sm font-medium", 
-                            isActive ? 'text-primary font-semibold' : 'text-foreground'
-                          )}>
-                            {t(item.name)}
-                          </span>
-                          {isActive && (
-                            <div className="ml-auto w-1.5 h-1.5 bg-primary rounded-full"></div>
-                          )}
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </ScrollArea>
-              </SheetContent>
-            </Sheet>
-            
-            {/* Logo */}
-            <Link to="/" className="flex items-center space-x-2 group">
-              <Brain className="h-8 w-8 text-primary transition-all duration-300 group-hover:scale-110 group-hover:rotate-12" />
-              <span className="text-xl font-bold bg-gradient-primary bg-clip-text text-transparent transition-all duration-300 group-hover:scale-105">
-                MindMatters
-              </span>
-            </Link>
-          </div>
+const SignUp = () => {
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { signUp, loading } = useAuthContext();
 
-          {/* Right: Sign In, Language, Dark Mode Toggle */}
-          <div className="flex items-center space-x-4">
-            {/* Sign In Button */}
-            <Link to="/signin">
-                <Button
-                variant="default"
-                size="sm"
-                className="rounded-full bg-primary hover:bg-primary/90 text-primary-foreground font-medium px-6 transition-all duration-300 hover:scale-105 hover:shadow-lg"
-              >
-                <LogIn className="h-4 w-4 mr-2" />
-                {t('nav.signin')}
-              </Button>
-            </Link>
-            
-            {/* Language Dropdown */}
-            <Select value={language} onValueChange={(value) => setLanguage(value as 'english' | 'hindi')}>
-              <SelectTrigger className="w-32 h-9 border-border bg-background/50 backdrop-blur-sm">
-                <Languages className="h-4 w-4 mr-2" />
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-background border border-border z-50">
-                <SelectItem value="english">{t('common.english')}</SelectItem>
-                <SelectItem value="hindi">{t('common.hindi')}</SelectItem>
-              </SelectContent>
-            </Select>
-            
-            {/* Dark Mode Toggle */}
-            <ThemeToggle />
-          </div>
+  const form = useForm<SignUpForm>({
+    resolver: zodResolver(signUpSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+    },
+  });
+
+  const onSubmit = (data: SignUpForm) => {
+    signUp(data.email, data.password, {
+      full_name: data.name
+    }).then(({ error }) => {
+      if (!error) {
+        navigate("/");
+      }
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-black flex items-center justify-center">
+        <div className="text-white text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
+          <p>Creating your account...</p>
         </div>
       </div>
-    </nav>
-  );
-}
+    );
+  }
 
-export default Navigation;
+  return (
+    <ProtectedRoute requireAuth={false}>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-black flex items-center justify-center p-4">
+        <Card className="w-full max-w-md shadow-card hover:shadow-elegant hover:scale-[1.02] transition-all duration-300">
+          <CardHeader className="text-center space-y-2">
+            <div className="mx-auto w-12 h-12 bg-gradient-primary rounded-full flex items-center justify-center mb-2">
+              <User className="w-6 h-6 text-primary-foreground" />
+            </div>
+            <CardTitle className="text-2xl font-bold">Create Account</CardTitle>
+            <CardDescription>
+              Join MindMatters to start your wellness journey
+            </CardDescription>
+          </CardHeader>
+          
+          <CardContent>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Full Name</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
+                          <Input
+                            placeholder="Enter your full name"
+                            className="pl-10"
+                            {...field}
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
+                          <Input
+                            placeholder="Enter your email"
+                            type="email"
+                            className="pl-10"
+                            {...field}
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
+                          <Input
+                            placeholder="Create a password"
+                            type={showPassword ? "text" : "password"}
+                            className="pl-10 pr-10"
+                            {...field}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                            onClick={() => setShowPassword(!showPassword)}
+                          >
+                            {showPassword ? (
+                              <EyeOff className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <Eye className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </Button>
+                        </div>
+                      </FormControl>
+                      <FormDescription>
+                        Must be at least 8 characters long
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="confirmPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Confirm Password</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <CheckCircle className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
+                          <Input
+                            placeholder="Confirm your password"
+                            type={showConfirmPassword ? "text" : "password"}
+                            className="pl-10 pr-10"
+                            {...field}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          >
+                            {showConfirmPassword ? (
+                              <EyeOff className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <Eye className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </Button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <Button 
+                  type="submit" 
+                  className="w-full bg-gradient-primary hover:opacity-90 transition-opacity"
+                  disabled={form.formState.isSubmitting}
+                >
+                  {form.formState.isSubmitting ? "Creating Account..." : "Create Account"}
+                </Button>
+              </form>
+            </Form>
+
+            <div className="mt-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                Already have an account?{" "}
+                <Link
+                  to="/signin"
+                  className="font-medium text-primary hover:text-primary-glow transition-colors"
+                >
+                  Sign in here
+                </Link>
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </ProtectedRoute>
+  );
+};
+
+export default SignUp;

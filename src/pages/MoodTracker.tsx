@@ -1,243 +1,228 @@
 import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useMoodTracking } from "@/hooks/useMoodTracking";
+import { useAuthContext } from "@/contexts/AuthContext";
+import { LoadingScreen } from "@/components/ui/loading-screen";
+import { Link, useNavigate } from "react-router-dom";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
-import { 
-  Heart,
-  Smile,
-  Meh,
-  Frown,
-  TrendingUp,
-  Calendar,
-  BarChart3,
-  BookOpen
-} from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { useToast } from "@/hooks/use-toast";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { Eye, EyeOff, User, Mail, Lock, CheckCircle } from "lucide-react";
 
-const getMoodOptions = (t: any) => [
-  { emoji: "😊", label: t('moodTracker.moods.great'), value: 5, color: "bg-green-500", icon: Smile },
-  { emoji: "🙂", label: t('moodTracker.moods.good'), value: 4, color: "bg-lime-500", icon: Smile },
-  { emoji: "😐", label: t('moodTracker.moods.okay'), value: 3, color: "bg-yellow-500", icon: Meh },
-  { emoji: "🙁", label: t('moodTracker.moods.low'), value: 2, color: "bg-orange-500", icon: Frown },
-  { emoji: "😢", label: t('moodTracker.moods.struggling'), value: 1, color: "bg-red-500", icon: Frown },
-];
+const signUpSchema = z.object({
+  name: z.string().min(2, "Name must be at least 2 characters"),
+  email: z.string().email("Please enter a valid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  confirmPassword: z.string()
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
+});
 
-const getWeeklyData = (t: any) => [
-  { day: t('moodTracker.days.mon'), mood: 4, activities: [t('moodTracker.activities.study'), t('moodTracker.activities.exercise')] },
-  { day: t('moodTracker.days.tue'), mood: 3, activities: [t('moodTracker.activities.study'), t('moodTracker.activities.social')] },
-  { day: t('moodTracker.days.wed'), mood: 5, activities: [t('moodTracker.activities.rest'), t('moodTracker.activities.meditation')] },
-  { day: t('moodTracker.days.thu'), mood: 2, activities: [t('moodTracker.activities.exam'), t('moodTracker.activities.stress')] },
-  { day: t('moodTracker.days.fri'), mood: 4, activities: [t('moodTracker.activities.friends'), t('moodTracker.activities.relax')] },
-  { day: t('moodTracker.days.sat'), mood: 5, activities: [t('moodTracker.activities.family'), t('moodTracker.activities.fun')] },
-  { day: t('moodTracker.days.sun'), mood: 4, activities: [t('moodTracker.activities.study'), t('moodTracker.activities.plan')] },
-];
+type SignUpForm = z.infer<typeof signUpSchema>;
 
-export default function MoodTracker() {
-  const { t } = useLanguage();
-  const [selectedMood, setSelectedMood] = useState<number | null>(null);
-  const [note, setNote] = useState("");
-  const [isSubmitted, setIsSubmitted] = useState(false);
+const SignUp = () => {
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const { signUp, loading } = useAuthContext();
 
-  const handleMoodSubmit = () => {
-    if (selectedMood) {
-      // In a real app, this would save to database
-      setIsSubmitted(true);
-      setTimeout(() => setIsSubmitted(false), 3000);
-      setSelectedMood(null);
-      setNote("");
-    }
+  const form = useForm<SignUpForm>({
+    resolver: zodResolver(signUpSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+    },
+  });
+
+  const onSubmit = (data: SignUpForm) => {
+    signUp(data.email, data.password, {
+      full_name: data.name
+    }).then(({ error }) => {
+      if (!error) {
+        navigate("/");
+      }
+    });
   };
 
-  const moodOptions = getMoodOptions(t);
-  const weeklyData = getWeeklyData(t);
-  const averageMood = weeklyData.reduce((sum, day) => sum + day.mood, 0) / weeklyData.length;
-
-  return (
-    <div className="min-h-screen pt-16 bg-background">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-4 flex items-center justify-center gap-3">
-            <Heart className="h-8 w-8 text-primary" />
-            {t('moodTracker.title')}
-          </h1>
-          <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            {t('moodTracker.subtitle')}
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Daily Mood Entry */}
-          <div className="lg:col-span-2">
-            <Card className="mb-6">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
-                  {t('moodTracker.dailyEntry')}
-                </CardTitle>
-                <CardDescription>
-                  {t('moodTracker.dailyDescription')}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {/* Mood Selection */}
-                <div className="grid grid-cols-5 gap-4">
-                  {moodOptions.map((mood) => (
-                    <button
-                      key={mood.value}
-                      onClick={() => setSelectedMood(mood.value)}
-                      className={`p-4 rounded-lg border-2 transition-all duration-300 hover:scale-105 ${
-                        selectedMood === mood.value
-                          ? "border-primary bg-primary/10 shadow-soft"
-                          : "border-border hover:border-primary/50"
-                      }`}
-                    >
-                      <div className="text-3xl mb-2">{mood.emoji}</div>
-                      <div className="text-sm font-medium">{mood.label}</div>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Optional Note */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    {t('moodTracker.whatsOnMind')}
-                  </label>
-                  <Textarea
-                    placeholder={t('moodTracker.placeholder')}
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    className="min-h-[100px]"
-                  />
-                </div>
-
-                {/* Submit Button */}
-                <Button
-                  variant={isSubmitted ? "success" : "default"}
-                  onClick={handleMoodSubmit}
-                  disabled={!selectedMood || isSubmitted}
-                  className="w-full"
-                >
-                  {isSubmitted ? t('moodTracker.recorded') : t('moodTracker.recordMood')}
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Weekly Overview */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  {t('moodTracker.weekOverview')}
-                </CardTitle>
-                <CardDescription>
-                  {t('moodTracker.weekDescription')}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-7 gap-2 mb-6">
-                  {weeklyData.map((day, index) => {
-                    const moodData = moodOptions.find(m => m.value === day.mood);
-                    return (
-                      <div key={index} className="text-center">
-                        <div className="text-xs text-muted-foreground mb-1">{day.day}</div>
-                        <div className={`w-12 h-12 mx-auto rounded-lg ${moodData?.color} flex items-center justify-center text-white font-bold`}>
-                          {day.mood}
-                        </div>
-                        <div className="text-xs mt-1">
-                          {day.activities.map((activity, i) => (
-                            <Badge key={i} variant="secondary" className="text-xs mr-1 mb-1">
-                              {activity}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                
-                <div className="flex items-center justify-between text-sm">
-                  <span>{t('moodTracker.averageMood')}</span>
-                  <Badge variant="outline" className="text-lg">
-                    {averageMood.toFixed(1)}/5
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Quick Stats */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
-                  {t('moodTracker.progress')}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-primary">7</div>
-                  <div className="text-sm text-muted-foreground">{t('moodTracker.daysTracked')}</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-success">3</div>
-                  <div className="text-sm text-muted-foreground">{t('moodTracker.wellnessStreak')}</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-warning">85%</div>
-                  <div className="text-sm text-muted-foreground">{t('moodTracker.aboveAverage')}</div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Mood Insights */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BookOpen className="h-5 w-5" />
-                  {t('moodTracker.insights')}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="p-3 bg-primary/10 rounded-lg">
-                  <div className="text-sm font-medium text-primary mb-1">
-                    {t('moodTracker.patternDetected')}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {t('moodTracker.patternMessage')}
-                  </div>
-                </div>
-                
-                <div className="p-3 bg-success/10 rounded-lg">
-                  <div className="text-sm font-medium text-success mb-1">
-                    {t('moodTracker.positiveTrigger')}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {t('moodTracker.triggerMessage')}
-                  </div>
-                </div>
-
-                <Button variant="outline" size="sm" className="w-full">
-                  <BookOpen className="h-4 w-4 mr-2" />
-                  {t('moodTracker.viewResources')}
-                </Button>
-              </CardContent>
-            </Card>
-
-            {/* Privacy Notice */}
-            <Card className="border-muted">
-              <CardContent className="pt-6">
-                <div className="text-center text-sm text-muted-foreground">
-                  {t('moodTracker.privacyNotice')}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-black flex items-center justify-center">
+        <div className="text-white text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-4"></div>
+          <p>Creating your account...</p>
         </div>
       </div>
-    </div>
+    );
+  }
+
+  return (
+    <ProtectedRoute requireAuth={false}>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-900 to-black flex items-center justify-center p-4">
+        <Card className="w-full max-w-md shadow-card hover:shadow-elegant hover:scale-[1.02] transition-all duration-300">
+          <CardHeader className="text-center space-y-2">
+            <div className="mx-auto w-12 h-12 bg-gradient-primary rounded-full flex items-center justify-center mb-2">
+              <User className="w-6 h-6 text-primary-foreground" />
+            </div>
+            <CardTitle className="text-2xl font-bold">Create Account</CardTitle>
+            <CardDescription>
+              Join MindMatters to start your wellness journey
+            </CardDescription>
+          </CardHeader>
+          
+          <CardContent>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Full Name</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
+                          <Input
+                            placeholder="Enter your full name"
+                            className="pl-10"
+                            {...field}
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
+                          <Input
+                            placeholder="Enter your email"
+                            type="email"
+                            className="pl-10"
+                            {...field}
+                          />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
+                          <Input
+                            placeholder="Create a password"
+                            type={showPassword ? "text" : "password"}
+                            className="pl-10 pr-10"
+                            {...field}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                            onClick={() => setShowPassword(!showPassword)}
+                          >
+                            {showPassword ? (
+                              <EyeOff className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <Eye className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </Button>
+                        </div>
+                      </FormControl>
+                      <FormDescription>
+                        Must be at least 8 characters long
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="confirmPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Confirm Password</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <CheckCircle className="absolute left-3 top-3 h-4 w-4 text-muted-foreground z-10 pointer-events-none" />
+                          <Input
+                            placeholder="Confirm your password"
+                            type={showConfirmPassword ? "text" : "password"}
+                            className="pl-10 pr-10"
+                            {...field}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          >
+                            {showConfirmPassword ? (
+                              <EyeOff className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <Eye className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </Button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <Button 
+                  type="submit" 
+                  className="w-full bg-gradient-primary hover:opacity-90 transition-opacity"
+                  disabled={form.formState.isSubmitting}
+                >
+                  {form.formState.isSubmitting ? "Creating Account..." : "Create Account"}
+                </Button>
+              </form>
+            </Form>
+
+            <div className="mt-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                Already have an account?{" "}
+                <Link
+                  to="/signin"
+                  className="font-medium text-primary hover:text-primary-glow transition-colors"
+                >
+                  Sign in here
+                </Link>
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </ProtectedRoute>
   );
-}
+};
+
+export default SignUp;
