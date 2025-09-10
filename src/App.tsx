@@ -9,6 +9,8 @@ import Navigation from "@/components/Navigation";
 import { FloatingActionButton } from "@/components/ui/floating-action-button";
 import FooterTranslated from "@/components/FooterTranslated";
 import ScrollToTop from "@/components/ScrollToTop";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Dashboard from "./pages/Dashboard";
 import MoodTracker from "./pages/MoodTracker";
 import AIChat from "./pages/AIChat";
@@ -81,16 +83,18 @@ const App = () => (
       enableSystem
       disableTransitionOnChange
     >
-      <LanguageProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <ScrollToTop />
-            <AppContent />
-          </BrowserRouter>
-        </TooltipProvider>
-      </LanguageProvider>
+      <AuthProvider>
+        <LanguageProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <ScrollToTop />
+              <AppContent />
+            </BrowserRouter>
+          </TooltipProvider>
+        </LanguageProvider>
+      </AuthProvider>
     </ThemeProvider>
   </QueryClientProvider>
 );
